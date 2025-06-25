@@ -1,0 +1,34 @@
+<?php
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+header("Access-Control-Allow-Headers:Content-Type, Authorization");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST");
+header('Content-Type: application/json; charset=utf-8');
+require_once __DIR__ . '/../../../database.php';  
+$databaseName = "main_db"; 
+$dbConnection = new DatabaseConnection($databaseName);
+$entityManager = $dbConnection->getEntityManager(); 
+ 
+$input = (array) json_decode(file_get_contents('php://input'), TRUE);
+if ($_SERVER['REQUEST_METHOD'] === "POST") {
+        if(getBearerToken()){
+            $database = json_decode(getBearerToken(),true)['database'];
+            $dbConnection = new DatabaseConnection($database);
+            $processDb = $dbConnection->getEntityManager();    
+            $set_form = new form_loop();
+            $table_form = new configuration_process\table_form;
+            $form = $entityManager->find(configuration_process\form::class, $input['form_id']);
+            $form_loop = $set_form->setFormloop($entityManager,$processDb,$form,true);
+            $new_form = $entityManager->find(configuration_process\form::class, $form_loop);
+            $table_form->setForm($new_form);
+            $entityManager->persist($table_form);
+            $entityManager->flush();
+        echo header("HTTP/1.1 200 OK");
+        echo json_encode(["Form Duplicate Complete!"]);
+        }
+    }
+    else{ 
+        header('HTTP/1.1 405 Method Not Allowed');
+        echo json_encode(["Message" => "Method Not Allowed"]);
+    }
