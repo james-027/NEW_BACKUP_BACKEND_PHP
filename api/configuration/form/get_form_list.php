@@ -16,11 +16,11 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
     if (getBearerToken()) { 
         
         $searchTerm = isset($input['search']) ? trim($input['search']) : '';
-        if (empty($searchTerm)) {
-            header('HTTP/1.1 200 OK');
-            echo json_encode([]);
-            exit;
-        }
+        // if (empty($searchTerm)) {
+        //     header('HTTP/1.1 200 OK');
+        //     echo json_encode([]);
+        //     exit;
+        // }
         try {
         $sql = "
             SELECT 
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
             LEFT JOIN main_db.user u ON f.created_by = u.id
             LEFT JOIN main_db.form_type ft ON f.type_id = ft.id
             WHERE 
-            (DATE_FORMAT(f.date_created, '%M %d %Y') LIKE CONCAT('%', :search, '%') OR
+            (DATE_FORMAT(f.date_created, '%M %e %Y') LIKE CONCAT('%', :search, '%') OR
             f.title LIKE CONCAT('%', :search, '%') OR
             f.version LIKE CONCAT('%', :search, '%') OR
             ft.description LIKE CONCAT('%', :search, '%') OR
