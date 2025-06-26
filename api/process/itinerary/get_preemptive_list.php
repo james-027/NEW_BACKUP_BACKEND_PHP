@@ -8,6 +8,9 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../../database.php';
 
+$databaseName = "main_db";
+$dbConnection = new DatabaseConnection($databaseName);
+$entityManager = $dbConnection->getEntityManager();
 $input = (array) json_decode(file_get_contents('php://input'), true);
 
 if ($_SERVER['REQUEST_METHOD'] === "POST") {
@@ -17,63 +20,83 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
             $database = $token['database'];
             $dbConnection = new DatabaseConnection($database);
             $processDb = $dbConnection->getEntityManager();
-            $conn = $processDb->getConnection();
-            $searchTerm = strtolower(trim($input['search'] ?? ''));
-            $sql = "
-                SELECT 
-                    p.id,
-                    p.date_created,
-                    p.date_planned,
-                    p.date_actual,
-                    p.remark,
-                    p.itinerary_id,
-                    p.remove,
-                    p.created_by,
-                    u.first_name,
-                    u.last_name,
-                    s.outlet_name
-                FROM preemptive p
-                LEFT JOIN main_db.user u ON u.id = p.user_id
-                LEFT JOIN main_db.store s ON s.id = p.store_id
-                WHERE
-                    LOWER(CONCAT(u.first_name, ' ', u.last_name)) LIKE :search
-                    OR LOWER(s.outlet_name) LIKE :search
-                    OR LOWER(p.remark) LIKE :search
-                    OR DATE_FORMAT(p.date_created, '%M %e %Y') LIKE :search
-                    OR DATE_FORMAT(p.date_planned, '%M %e %Y') LIKE :search
-                    OR DATE_FORMAT(p.date_actual, '%M %e %Y') LIKE :search
-            ";
-            $stmt = $conn->prepare($sql);
-            $stmt->bindValue('search', '%' . $searchTerm . '%');
-            $results = $stmt->executeQuery()->fetchAllAssociative();
-            $preemptive_list = [];
-            foreach ($results as $row) {
-                $status_color = null;
-                if($row['itinerary_id']){
-                    $status_color = "yellow";
-                    $itinerary = $processDb->find(configuration_process\itinerary::class, $row['itinerary_id']);
-                    if($itinerary->getCheckin()){
-                          $status_color = "green";
-                    }else{
-                         $status_color = "red";
-                    }
-                }else{
-                    $status_color = 'blue';
-                }
-                if($row['remove'] == false || $row['remove'] == null){
-                $preemptive_list[] = [
-                    'id' => $row['id'],
-                    'user' => $row['first_name'] . " " . $row['last_name'],
-                    'store' => $row['outlet_name'],
-                    'itinerary'=> $row['itinerary_id'],
-                    'date_created' => (new DateTime($row['date_created']))->format('Y-m-d'),
-                    'date_planned' => (new DateTime($row['date_planned']))->format('Y-m-d'),
-                    'date_actual' => (new DateTime($row['date_actual']))->format('Y-m-d'),
-                    'remark' => $row['remark'],
-                    'created_by' => $row['created_by'],
-                    'status_color' =>$status_color
 
-                ];
+            $preemptive_repository = $processDb->getRepository(configuration_process\preemptive::class);
+            $startDate = $input['start_date'] ?? null;
+            $endDate = $input['end_date'] ?? null;
+            $userId = $input['user_id'] ?? null;
+            $storeId = $input['store_id'] ?? null;
+            $queryBuilder = $preemptive_repository->createQueryBuilder('p');
+            if (!empty($startDate) && !empty($endDate)) {
+
+                $queryBuilder
+                    ->where('p.date_planned BETWEEN :start AND :end')
+                    ->setParameter('start', $startDate)
+                    ->setParameter('end', $endDate);
+            } elseif (!empty($startDate)) {
+
+
+                $queryBuilder
+                    ->where('p.date_planned >= :start')
+                    ->setParameter('start', $startDate);
+            } elseif (!empty($endDate)) {
+
+                $queryBuilder
+                    ->where('p.date_planned <= :end')
+                    ->setParameter('end', $endDate);
+            }
+
+            if (!empty($userId)) {
+                $queryBuilder->andWhere('p.user_id = :userId')
+                    ->setParameter('userId', $userId);
+            }
+
+            if (!empty($storeId)) {
+                $queryBuilder->andWhere('p.store_id = :storeId')
+                    ->setParameter('storeId', $storeId);
+            }
+
+            $queryBuilder->andWhere('p.remove IS NULL OR p.remove = false');
+            $results = $queryBuilder->getQuery()->getResult();
+            $preemptive_list = [];
+            foreach ($results as $result) {
+                $status_color = 'blue';
+
+                if ($result->getItinerary()) {
+                    $itinerary = $processDb->find(configuration_process\itinerary::class, $result->getItinerary());
+                    $timezone = new DateTimeZone('Asia/Manila');
+                    $now = new DateTime('now', $timezone);
+                    $plannedDate = $result->getDateplanned();
+                    $plannedDate->setTimezone($timezone);
+                    if ($now->format('Y-m-d') === $plannedDate->format('Y-m-d')) {
+                        if ($itinerary && $itinerary->getCheckin() && $itinerary->getCheckout()) {
+                            $status_color = 'green';
+                        } else if ($itinerary && !$itinerary->getCheckin() && !$itinerary->getCheckout()) {
+                            $status_color = 'yellow';
+                        } else {
+                            $status_color = 'red';
+                        }
+                    } else {
+                        $status_color = 'red';
+                    }
+                }
+                if ($result->getRemove() == false || $result->getRemove() == null) {
+                    $user = $entityManager->find(configuration\user::class, $result->getUser());
+                    $created_by = $entityManager->find(configuration\user::class, $result->getCreatedby());
+                    $store = $entityManager->find(configuration\store::class, $result->getStore());
+                    $preemptive_list[] = [
+                        'id' => $result->getId(),
+                        'user' => $user->getFirstname() . ' ' . $user->getLastname(),
+                        'store' => $store->getOutletname(),
+                        'itinerary' => $result->getItinerary(),
+                        'date_created' => $result->getDatecreated()->format('Y-m-d'),
+                        'date_planned' => $result->getDateplanned()->format('Y-m-d'),
+                        'date_actual' =>  $result->getDateactual()->format('Y-m-d'),
+                        'remark' => $result->getRemark(),
+                        'created_by' => $created_by->getFirstname() . ' ' . $created_by->getLastname(),
+                        'status_color' => $status_color
+
+                    ];
                 }
             }
 

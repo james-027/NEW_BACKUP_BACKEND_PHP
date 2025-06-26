@@ -27,7 +27,6 @@ if ($_SERVER['REQUEST_METHOD'] === "PATCH") {
                         $new_preemptive->setStore($input["store_id"]);
                         $new_preemptive->setUser($input["user_id"]);
                         $new_preemptive->setRemark($input["remark"]);
-                        $new_preemptive->setRemove($input["remove"]);
                         $new_preemptive->setItinerary($input["itinerary_id"]);
                         $date_planned = parseDate($input["date_planned"]);
                         $actual_planned =parseDate($input["actual_planned"]);
