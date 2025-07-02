@@ -19,8 +19,8 @@ if ($_SERVER['REQUEST_METHOD'] === "DELETE") {
         $database = json_decode(getBearerToken(), true)['database'];
         $dbConnection = new DatabaseConnection($database);
         $entityManager = $dbConnection->getEntityManager();
-        $new_preemptive = $entityManager->find(configuration_process\preemptive::class, $input['preemptive_id']);
-        $new_preemptive->setRemove(true);
+        $new_preventive = $entityManager->find(configuration_process\preventive::class, $input['preventive_id']);
+        $new_preventive->setRemove(true);
         $entityManager->flush();
         echo header("HTTP/1.1 200 OK");
         echo json_encode(['Message' => "Successfully Updated"]);

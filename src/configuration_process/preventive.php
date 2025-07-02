@@ -7,8 +7,8 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\Common\Collections\ArrayCollection;
 
 #[ORM\Entity]
-#[ORM\Table(name: 'preemptive')]
-class preemptive
+#[ORM\Table(name: 'preventive')]
+class preventive
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]

@@ -21,26 +21,25 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
             $dbConnection = new DatabaseConnection($database);
             $processDb = $dbConnection->getEntityManager();
 
-            $preemptive_repository = $processDb->getRepository(configuration_process\preemptive::class);
+            $preventive_repository = $processDb->getRepository(configuration_process\preventive::class);
+
             $startDate = $input['start_date'] ?? null;
             $endDate = $input['end_date'] ?? null;
             $userId = $input['user_id'] ?? null;
             $storeId = $input['store_id'] ?? null;
-            $queryBuilder = $preemptive_repository->createQueryBuilder('p');
-            if (!empty($startDate) && !empty($endDate)) {
 
+            $queryBuilder = $preventive_repository->createQueryBuilder('p');
+
+            if (!empty($startDate) && !empty($endDate)) {
                 $queryBuilder
                     ->where('p.date_planned BETWEEN :start AND :end')
                     ->setParameter('start', $startDate)
                     ->setParameter('end', $endDate);
             } elseif (!empty($startDate)) {
-
-
                 $queryBuilder
                     ->where('p.date_planned >= :start')
                     ->setParameter('start', $startDate);
             } elseif (!empty($endDate)) {
-
                 $queryBuilder
                     ->where('p.date_planned <= :end')
                     ->setParameter('end', $endDate);
@@ -57,47 +56,69 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
             }
 
             $queryBuilder->andWhere('p.remove IS NULL OR p.remove = false');
+
             $results = $queryBuilder->getQuery()->getResult();
             $preemptive_list = [];
+
             foreach ($results as $result) {
-                $status_color = 'blue';
+                $status_color = 'gray'; // Default
 
                 if ($result->getItinerary()) {
                     $itinerary = $processDb->find(configuration_process\itinerary::class, $result->getItinerary());
+
                     $timezone = new DateTimeZone('Asia/Manila');
                     $now = new DateTime('now', $timezone);
+
                     $plannedDate = $result->getDateplanned();
                     $plannedDate->setTimezone($timezone);
-                    if ($now->format('Y-m-d') === $plannedDate->format('Y-m-d')) {
-                        if ($itinerary && $itinerary->getCheckin() && $itinerary->getCheckout()) {
-                            $status_color = 'green';
-                        } else if ($itinerary && !$itinerary->getCheckin() && !$itinerary->getCheckout()) {
-                            $status_color = 'yellow';
-                        } else {
+
+                    $actualDate = $result->getDateactual();
+                    if ($actualDate) {
+                        $actualDate->setTimezone($timezone);
+                    }
+
+                    $plannedStr = $plannedDate->format('Y-m-d');
+                    $todayStr = $now->format('Y-m-d');
+
+                    if ($todayStr === $plannedStr && $itinerary) {
+                        $checkin = $itinerary->getCheckin();
+                        $checkout = $itinerary->getCheckout();
+                        if (is_null($checkin) && is_null($checkout)) {
+                            $status_color = 'blue';
+                        } elseif (!$checkin && !$checkout) {
                             $status_color = 'red';
+                        } elseif ($checkin  && !$checkout) {
+                            $status_color = 'red';
+                        } elseif ($checkin && $checkout) {
+                            $status_color = 'green';
+                        } else {
+                            $status_color = 'blue';
                         }
-                    } else {
-                        $status_color = 'red';
+                    } elseif ($actualDate) {
+                        if ($actualDate->format('Y-m-d') < $plannedStr) {
+                            $status_color = 'violet';
+                        } elseif ($actualDate->format('Y-m-d') > $plannedStr) {
+                            $status_color = 'yellow';
+                        }
                     }
                 }
-                if ($result->getRemove() == false || $result->getRemove() == null) {
-                    $user = $entityManager->find(configuration\user::class, $result->getUser());
-                    $created_by = $entityManager->find(configuration\user::class, $result->getCreatedby());
-                    $store = $entityManager->find(configuration\store::class, $result->getStore());
-                    $preemptive_list[] = [
-                        'id' => $result->getId(),
-                        'user' => $user->getFirstname() . ' ' . $user->getLastname(),
-                        'store' => $store->getOutletname(),
-                        'itinerary' => $result->getItinerary(),
-                        'date_created' => $result->getDatecreated()->format('Y-m-d'),
-                        'date_planned' => $result->getDateplanned()->format('Y-m-d'),
-                        'date_actual' =>  $result->getDateactual()->format('Y-m-d'),
-                        'remark' => $result->getRemark(),
-                        'created_by' => $created_by->getFirstname() . ' ' . $created_by->getLastname(),
-                        'status_color' => $status_color
 
-                    ];
-                }
+                $user = $entityManager->find(configuration\user::class, $result->getUser());
+                $created_by = $entityManager->find(configuration\user::class, $result->getCreatedby());
+                $store = $entityManager->find(configuration\store::class, $result->getStore());
+
+                $preemptive_list[] = [
+                    'id' => $result->getId(),
+                    'user' => $user->getFirstname() . ' ' . $user->getLastname(),
+                    'store' => $store->getOutletname(),
+                    'itinerary' => $result->getItinerary(),
+                    'date_created' => $result->getDatecreated()->format('Y-m-d'),
+                    'date_planned' => $result->getDateplanned()->format('Y-m-d'),
+                    'date_actual' => $result->getDateactual()->format('Y-m-d'),
+                    'remark' => $result->getRemark(),
+                    'created_by' => $created_by->getFirstname() . ' ' . $created_by->getLastname(),
+                    'status_color' => $status_color
+                ];
             }
 
             header('HTTP/1.1 200 OK');
