@@ -331,6 +331,6 @@ class itinerary
         $this->itinerary_reform = new ArrayCollection();
         $this->itinerary_justification = new ArrayCollection();
         $this->itinerary_form = new ArrayCollection();
-        $this->itinerary_tracker = new ArrayCollection();
+        $this->itinerary_tracker_itinerary = new ArrayCollection();
     }
 }
